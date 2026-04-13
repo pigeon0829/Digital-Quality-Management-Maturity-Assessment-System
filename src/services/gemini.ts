@@ -4,9 +4,18 @@ let genAI: GoogleGenAI | null = null;
 
 function getGenAI() {
   if (!genAI) {
-    const apiKey = process.env.GEMINI_API_KEY;
+    // Try both standard and Vite-prefixed environment variables
+    const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+    
+    console.log("API Key Check:", {
+      hasKey: !!apiKey,
+      isUndefinedString: apiKey === 'undefined',
+      isEmpty: apiKey === '',
+      prefix: apiKey ? apiKey.substring(0, 3) + "..." : "none"
+    });
+
     if (!apiKey || apiKey === 'undefined' || apiKey === '') {
-      throw new Error("GEMINI_API_KEY is missing. If you are using Vercel, please add GEMINI_API_KEY to your Environment Variables in the Vercel Dashboard.");
+      return null; // Return null to trigger Demo Mode
     }
     genAI = new GoogleGenAI({ apiKey });
   }
@@ -51,10 +60,29 @@ export async function generateImprovementSuggestions(
     请使用专业、客观、具有洞察力的语气，并以 Markdown 格式输出。
   `;
 
-  console.log("Generating suggestions with Gemini...");
-
   try {
     const ai = getGenAI();
+    
+    if (!ai) {
+      console.warn("Gemini API Key not found. Falling back to Demo Mode.");
+      return `> **[演示模式]** 由于未检测到有效的 API Key，系统已为您生成模拟分析报告。
+      
+### 一、 综合现状诊断
+根据雷达图显示，贵司在 **${radarData.sort((a,b) => b.A - a.A)[0].subject}** 领域表现突出，但在 **${radarData.sort((a,b) => a.A - b.A)[0].subject}** 方面存在明显短板。整体均衡性有待提高。正态云图显示当前处于 **${maturityLevel}** 阶段，结果具有较高的可信度。
+
+### 二、 关键驱动因素分析 (IPA)
+- **优势区**: ${evaluations.filter(e => e.score > 80 && e.weight > 0.05).slice(0, 2).map(e => e.name).join('、') || '现有核心业务流程'}。
+- **改进区**: ${evaluations.filter(e => e.score < 60 && e.weight > 0.05).slice(0, 2).map(e => e.name).join('、') || '数字化质量追溯、实时监控系统'}。
+
+### 三、 针对性改进建议
+建议优先投入资源补齐 **${radarData.sort((a,b) => a.A - b.A)[0].subject}** 相关的数字化工具。引入自动化数据采集终端，减少人工干预，提升数据实时性。
+
+### 四、 数字化转型路线图
+- **短期**: 完成关键工序的数字化改造。
+- **长期**: 构建全价值链的质量大数据平台。`;
+    }
+
+    console.log("Generating suggestions with Gemini...");
     const response = await ai.models.generateContent({
       model: "gemini-flash-latest",
       contents: prompt,
@@ -69,10 +97,7 @@ export async function generateImprovementSuggestions(
   } catch (error) {
     console.error("Gemini API Error Details:", error);
     if (error instanceof Error) {
-      if (error.message.includes("GEMINI_API_KEY")) {
-        return "错误：未配置 Gemini API Key。如果您在 Vercel 部署，请在 Vercel 项目设置的 Environment Variables 中添加 GEMINI_API_KEY。";
-      }
-      return `生成建议时出错: ${error.message}`;
+      return `生成建议时出错: ${error.message}。请检查网络连接或 API Key 有效性。`;
     }
     return "无法生成建议，请稍后重试。";
   }
