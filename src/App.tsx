@@ -20,6 +20,7 @@ import {
   ArrowRight,
   Loader2
 } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 import { EVALUATION_MODEL, MATURITY_LEVELS, LEVEL_MEDIANS, Dimension } from './constants';
 import { MaturityRadarChart } from './components/MaturityRadarChart';
 import { NormalCloudChart } from './components/NormalCloudChart';
@@ -607,6 +608,7 @@ function AppContent() {
       <footer className="max-w-7xl mx-auto px-4 py-12 border-t border-slate-200 text-center">
         <p className="text-slate-400 text-sm">© 2026 数字化质量管理成熟度评价系统 · 专业版</p>
       </footer>
+      <Analytics />
     </div>
   );
 }
