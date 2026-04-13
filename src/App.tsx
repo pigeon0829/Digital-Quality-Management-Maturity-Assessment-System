@@ -28,6 +28,59 @@ import { QualityCloud } from './components/QualityCloud';
 import { generateImprovementSuggestions } from './services/gemini';
 import { cn } from './lib/utils';
 
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+          <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-200 max-w-md w-full text-center">
+            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <ShieldCheck className="w-8 h-8" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-800 mb-4">应用运行出错</h1>
+            <p className="text-slate-600 mb-6">
+              很抱歉，应用程序遇到了一个意外错误。这通常是由于环境配置（如 API Key 缺失）或数据异常引起的。
+            </p>
+            <div className="bg-slate-50 p-4 rounded-xl text-left mb-6 overflow-auto max-h-40">
+              <code className="text-xs text-red-500">{this.state.error?.message}</code>
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
+            >
+              刷新页面重试
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 type Step = 'intro' | 'evaluating' | 'results';
 
 interface Evaluator {
@@ -36,6 +89,14 @@ interface Evaluator {
 }
 
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
+}
+
+function AppContent() {
   const [step, setStep] = useState<Step>('intro');
   const [currentDimensionIdx, setCurrentDimensionIdx] = useState(0);
   const [evaluators, setEvaluators] = useState<Evaluator[]>([{ id: '1', name: '评价人 1' }]);

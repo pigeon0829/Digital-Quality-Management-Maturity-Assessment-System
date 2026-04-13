@@ -1,6 +1,17 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let genAI: GoogleGenAI | null = null;
+
+function getGenAI() {
+  if (!genAI) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'undefined') {
+      throw new Error("GEMINI_API_KEY is missing. Please set it in your environment variables.");
+    }
+    genAI = new GoogleGenAI({ apiKey });
+  }
+  return genAI;
+}
 
 export async function generateImprovementSuggestions(
   evaluations: { id: string; name: string; score: number; weight: number }[], 
@@ -41,13 +52,17 @@ export async function generateImprovementSuggestions(
   `;
 
   try {
+    const ai = getGenAI();
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-1.5-flash",
       contents: prompt,
     });
     return response.text;
   } catch (error) {
     console.error("Gemini API Error:", error);
+    if (error instanceof Error && error.message.includes("GEMINI_API_KEY")) {
+      return "错误：未配置 Gemini API Key。请在 Vercel 环境变量中设置 GEMINI_API_KEY。";
+    }
     return "无法生成建议，请稍后重试。";
   }
 }
