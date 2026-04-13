@@ -5,8 +5,8 @@ let genAI: GoogleGenAI | null = null;
 function getGenAI() {
   if (!genAI) {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey === 'undefined') {
-      throw new Error("GEMINI_API_KEY is missing. Please set it in your environment variables.");
+    if (!apiKey || apiKey === 'undefined' || apiKey === '') {
+      throw new Error("GEMINI_API_KEY is missing. If you are using Vercel, please add GEMINI_API_KEY to your Environment Variables in the Vercel Dashboard.");
     }
     genAI = new GoogleGenAI({ apiKey });
   }
@@ -38,7 +38,7 @@ export async function generateImprovementSuggestions(
     
     ### 二、 关键驱动因素分析 (IPA 矩阵分析)
     - **优势区 (Keep up the good work)**: 识别高重要性且表现优秀的指标，说明如何固化这些优势。
-    - **改进区 (Concentrate here)**: 识别高重要性但表现欠佳的“短板”指标。这是改进的重中之重，请给出针对性的突破建议。
+    - **改进区 (Concentrate here)**: 识别高重要性但表现欠佳的“短板”指标。这是改进的重重之重，请给出针对性的突破建议。
     - **维持/调整区**: 简要说明低优先级或资源可能过度投入的领域。
     
     ### 三、 针对性改进建议
@@ -51,11 +51,10 @@ export async function generateImprovementSuggestions(
     请使用专业、客观、具有洞察力的语气，并以 Markdown 格式输出。
   `;
 
-  console.log("Gemini Prompt:", prompt);
+  console.log("Generating suggestions with Gemini...");
 
   try {
     const ai = getGenAI();
-    console.log("Generating suggestions with Gemini...");
     const response = await ai.models.generateContent({
       model: "gemini-flash-latest",
       contents: prompt,
@@ -71,7 +70,7 @@ export async function generateImprovementSuggestions(
     console.error("Gemini API Error Details:", error);
     if (error instanceof Error) {
       if (error.message.includes("GEMINI_API_KEY")) {
-        return "错误：未配置 Gemini API Key。请在设置中配置。";
+        return "错误：未配置 Gemini API Key。如果您在 Vercel 部署，请在 Vercel 项目设置的 Environment Variables 中添加 GEMINI_API_KEY。";
       }
       return `生成建议时出错: ${error.message}`;
     }
