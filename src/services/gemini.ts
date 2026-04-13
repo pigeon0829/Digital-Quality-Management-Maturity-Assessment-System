@@ -51,17 +51,29 @@ export async function generateImprovementSuggestions(
     请使用专业、客观、具有洞察力的语气，并以 Markdown 格式输出。
   `;
 
+  console.log("Gemini Prompt:", prompt);
+
   try {
     const ai = getGenAI();
+    console.log("Generating suggestions with Gemini...");
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-flash-latest",
       contents: prompt,
     });
+    
+    if (!response.text) {
+      console.error("Gemini returned empty response");
+      return "无法生成建议：AI 返回了空内容。";
+    }
+    
     return response.text;
   } catch (error) {
-    console.error("Gemini API Error:", error);
-    if (error instanceof Error && error.message.includes("GEMINI_API_KEY")) {
-      return "错误：未配置 Gemini API Key。请在 Vercel 环境变量中设置 GEMINI_API_KEY。";
+    console.error("Gemini API Error Details:", error);
+    if (error instanceof Error) {
+      if (error.message.includes("GEMINI_API_KEY")) {
+        return "错误：未配置 Gemini API Key。请在设置中配置。";
+      }
+      return `生成建议时出错: ${error.message}`;
     }
     return "无法生成建议，请稍后重试。";
   }

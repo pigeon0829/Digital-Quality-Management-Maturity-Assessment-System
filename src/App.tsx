@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ClipboardCheck, 
@@ -18,8 +18,12 @@ import {
   Users,
   Database,
   ArrowRight,
-  Loader2
+  Loader2,
+  Download,
+  CheckCircle2
 } from 'lucide-react';
+import * as htmlToImage from 'html-to-image';
+import { jsPDF } from 'jspdf';
 import { EVALUATION_MODEL, MATURITY_LEVELS, LEVEL_MEDIANS, Dimension } from './constants';
 import { MaturityRadarChart } from './components/MaturityRadarChart';
 import { NormalCloudChart } from './components/NormalCloudChart';
@@ -97,12 +101,15 @@ export default function App() {
 }
 
 function AppContent() {
+  const reportRef = React.useRef<HTMLDivElement>(null);
   const [step, setStep] = useState<Step>('intro');
+  
   const [currentDimensionIdx, setCurrentDimensionIdx] = useState(0);
   const [evaluators, setEvaluators] = useState<Evaluator[]>([{ id: '1', name: '评价人 1' }]);
   const [currentEvaluatorIdx, setCurrentEvaluatorIdx] = useState(0);
   const [scores, setScores] = useState<Record<string, Record<string, number>>>({}); // evaluatorId -> indicatorId -> score
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [suggestions, setSuggestions] = useState<string>('');
 
   const currentDimension = EVALUATION_MODEL[currentDimensionIdx];
@@ -242,6 +249,87 @@ function AppContent() {
     setIsGenerating(false);
   };
 
+  const handleDownload = async () => {
+    if (!reportRef.current) return;
+    setIsDownloading(true);
+    
+    // Wait for charts to stabilize
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    try {
+      console.log('Generating PDF with html-to-image...');
+      
+      const element = reportRef.current;
+      
+      // html-to-image options
+      const options = {
+        quality: 0.9,
+        backgroundColor: '#ffffff',
+        style: {
+          transform: 'none',
+          borderRadius: '0',
+        },
+        // Filter out elements that might cause issues
+        filter: (node: HTMLElement) => {
+          if (node.classList && node.classList.contains('blur-[100px]')) return false;
+          return true;
+        }
+      };
+
+      // Safari Workaround: Call it once to "warm up" the fonts/images
+      await htmlToImage.toJpeg(element, options);
+      
+      // Actual generation
+      const dataUrl = await htmlToImage.toJpeg(element, options);
+      
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      });
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      // Create a temporary image to get dimensions
+      const img = new Image();
+      img.src = dataUrl;
+      
+      await new Promise((resolve) => {
+        img.onload = resolve;
+      });
+      
+      const imgWidth = img.width;
+      const imgHeight = img.height;
+      
+      const ratio = pdfWidth / imgWidth;
+      const imgScaledHeight = imgHeight * ratio;
+      
+      let heightLeft = imgScaledHeight;
+      let position = 0;
+      
+      pdf.addImage(dataUrl, 'JPEG', 0, position, pdfWidth, imgScaledHeight);
+      heightLeft -= pdfHeight;
+      
+      while (heightLeft > 0) {
+        position = heightLeft - imgScaledHeight;
+        pdf.addPage();
+        pdf.addImage(dataUrl, 'JPEG', 0, position, pdfWidth, imgScaledHeight);
+        heightLeft -= pdfHeight;
+      }
+      
+      const fileName = `数字化质量管理成熟度评价报告-${new Date().toISOString().split('T')[0]}.pdf`;
+      pdf.save(fileName);
+      console.log('PDF saved successfully');
+    } catch (error: any) {
+      console.error('Download failed:', error);
+      alert(`PDF 生成失败: ${error.message || '未知错误'}。建议使用 Chrome 浏览器以获得最佳体验。`);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const reset = () => {
     setScores({});
     setCurrentDimensionIdx(0);
@@ -281,6 +369,11 @@ function AppContent() {
               </div>
             </div>
           )}
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex flex-col items-end">
+              <span className="text-xs font-bold text-slate-400">专业版评价系统</span>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -355,10 +448,10 @@ function AppContent() {
                 </div>
               </div>
 
-              <div className="flex justify-center pt-8">
+              <div className="flex flex-col sm:flex-row justify-center items-center gap-4 pt-8">
                 <button 
                   onClick={() => setStep('evaluating')}
-                  className="group bg-slate-900 text-white px-8 py-4 rounded-full font-bold text-lg flex items-center gap-2 hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl active:scale-95"
+                  className="group bg-slate-900 text-white px-8 py-4 rounded-full font-bold text-lg flex items-center gap-2 hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl active:scale-95 w-full sm:w-auto justify-center"
                 >
                   开始评价
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -520,7 +613,7 @@ function AppContent() {
               animate={{ opacity: 1, scale: 1 }}
               className="space-y-8"
             >
-              <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
+              <div ref={reportRef} data-report-container className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
                 <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-10 text-white text-center relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
                     <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-500 rounded-full blur-[100px]"></div>
@@ -571,8 +664,8 @@ function AppContent() {
                       <Lightbulb className="text-blue-600 w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-slate-800">数字化转型改进建议 (IPA 分析法)</h3>
-                      <p className="text-xs text-slate-500">基于重要性-绩效分析 (IPA) 与 Gemini AI 生成的专业化指导方案</p>
+                      <h3 className="text-xl font-bold text-slate-800">数字化转型改进建议</h3>
+                      <p className="text-xs text-slate-500">基于多维指标分析与 Gemini AI 生成的专业化指导方案</p>
                     </div>
                   </div>
 
@@ -590,12 +683,21 @@ function AppContent() {
                   )}
                 </div>
 
-                <div className="p-8 bg-white border-t border-slate-100 flex justify-center">
+                <div className="p-8 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-center justify-center gap-4">
+                  <button 
+                    onClick={handleDownload}
+                    disabled={isDownloading}
+                    className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg disabled:opacity-50 w-full sm:w-auto justify-center"
+                  >
+                    {isDownloading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                    下载 PDF
+                  </button>
+                  
                   <button 
                     onClick={reset}
-                    className="flex items-center gap-2 text-slate-500 font-bold hover:text-slate-800 transition-colors"
+                    className="flex items-center gap-2 text-slate-500 font-bold hover:text-slate-800 transition-colors px-6 py-3"
                   >
-                    <RotateCcw className="w-5 h-5" /> 重新开始评估
+                    <RotateCcw className="w-5 h-5" /> 重新开始
                   </button>
                 </div>
               </div>
