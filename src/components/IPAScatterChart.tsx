@@ -10,12 +10,16 @@ interface IPAData {
 
 interface Props {
   data: IPAData[];
+  thresholds?: {
+    performance: number;
+    importance: number;
+  };
 }
 
-export const IPAScatterChart: React.FC<Props> = ({ data }) => {
-  // Calculate means for reference lines
-  const meanPerformance = data.reduce((acc, curr) => acc + curr.performance, 0) / data.length;
-  const meanImportance = data.reduce((acc, curr) => acc + curr.importance, 0) / data.length;
+export const IPAScatterChart: React.FC<Props> = ({ data, thresholds }) => {
+  // Use provided thresholds or calculate means
+  const meanPerformance = thresholds?.performance ?? (data.reduce((acc, curr) => acc + curr.performance, 0) / data.length);
+  const meanImportance = thresholds?.importance ?? (data.reduce((acc, curr) => acc + curr.importance, 0) / data.length);
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -38,9 +42,11 @@ export const IPAScatterChart: React.FC<Props> = ({ data }) => {
           <h3 className="text-lg font-bold text-slate-800">IPA (重要性-绩效) 分析矩阵</h3>
           <p className="text-xs text-slate-400 mt-1">横轴代表绩效(得分)，纵轴代表重要性(权重)</p>
         </div>
-        <div className="flex gap-4 text-[10px] font-bold">
-          <div className="flex items-center gap-1"><div className="w-2 h-2 bg-red-100 border border-red-200 rounded"></div> 改进区</div>
-          <div className="flex items-center gap-1"><div className="w-2 h-2 bg-green-100 border border-green-200 rounded"></div> 优势区</div>
+        <div className="flex flex-wrap gap-3 text-[10px] font-bold">
+          <div className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-500 rounded"></div> 优势区 (高重要性-高绩效)</div>
+          <div className="flex items-center gap-1"><div className="w-2 h-2 bg-red-500 rounded"></div> 改进区 (高重要性-低绩效)</div>
+          <div className="flex items-center gap-1"><div className="w-2 h-2 bg-slate-400 rounded"></div> 维持区 (低重要性-低绩效)</div>
+          <div className="flex items-center gap-1"><div className="w-2 h-2 bg-amber-500 rounded"></div> 调整区 (低重要性-高绩效)</div>
         </div>
       </div>
       
@@ -54,6 +60,7 @@ export const IPAScatterChart: React.FC<Props> = ({ data }) => {
             domain={[0, 100]} 
             stroke="#94a3b8"
             fontSize={12}
+            ticks={[0, 20, 40, 60, 80, 100]}
           >
             <Label value="绩效 (得分)" position="bottom" offset={20} fill="#64748b" fontSize={12} fontWeight="bold" />
           </XAxis>
@@ -70,17 +77,17 @@ export const IPAScatterChart: React.FC<Props> = ({ data }) => {
           <ZAxis type="number" range={[60, 400]} />
           <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
           
-          {/* Quadrant Labels */}
-          <ReferenceLine x={meanPerformance} stroke="#cbd5e1" strokeWidth={2} />
-          <ReferenceLine y={meanImportance} stroke="#cbd5e1" strokeWidth={2} />
+          {/* Quadrant Reference Lines */}
+          <ReferenceLine x={meanPerformance} stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" />
+          <ReferenceLine y={meanImportance} stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" />
           
           <Scatter name="指标" data={data} fill="#3b82f6" fillOpacity={0.6} stroke="#2563eb" />
           
-          {/* Quadrant Text Annotations */}
-          <text x="75%" y="15%" textAnchor="middle" fill="#10b981" fontSize="12" fontWeight="bold" opacity={0.5}>优势区 (保持)</text>
-          <text x="25%" y="15%" textAnchor="middle" fill="#ef4444" fontSize="12" fontWeight="bold" opacity={0.5}>改进区 (重点)</text>
-          <text x="25%" y="85%" textAnchor="middle" fill="#94a3b8" fontSize="12" fontWeight="bold" opacity={0.5}>维持区 (低优)</text>
-          <text x="75%" y="85%" textAnchor="middle" fill="#f59e0b" fontSize="12" fontWeight="bold" opacity={0.5}>调整区 (过度)</text>
+          {/* Quadrant Text Annotations - Positioned relative to thresholds */}
+          <text x="85%" y="10%" textAnchor="middle" fill="#10b981" fontSize="11" fontWeight="bold" opacity={0.6}>优势区 (保持)</text>
+          <text x="15%" y="10%" textAnchor="middle" fill="#ef4444" fontSize="11" fontWeight="bold" opacity={0.6}>改进区 (重点)</text>
+          <text x="15%" y="90%" textAnchor="middle" fill="#94a3b8" fontSize="11" fontWeight="bold" opacity={0.6}>维持区 (低优)</text>
+          <text x="85%" y="90%" textAnchor="middle" fill="#f59e0b" fontSize="11" fontWeight="bold" opacity={0.6}>调整区 (过度)</text>
         </ScatterChart>
       </ResponsiveContainer>
     </div>

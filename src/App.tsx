@@ -110,6 +110,7 @@ function AppContent() {
   const [scores, setScores] = useState<Record<string, Record<string, number>>>({}); // evaluatorId -> indicatorId -> score
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [showFullData, setShowFullData] = useState(false);
   const [suggestions, setSuggestions] = useState<string>('');
 
   const currentDimension = EVALUATION_MODEL[currentDimensionIdx];
@@ -211,6 +212,10 @@ function AppContent() {
 
   const results = useMemo(() => calculateResults(), [scores]);
 
+  const dimensionRanking = useMemo(() => {
+    return [...results.dimensionScores].sort((a, b) => b.A - a.A);
+  }, [results.dimensionScores]);
+
   const indicatorData = useMemo(() => {
     const data: { id: string; name: string; score: number; weight: number }[] = [];
     EVALUATION_MODEL.forEach(dim => {
@@ -234,6 +239,20 @@ function AppContent() {
     });
     return data;
   }, [scores, evaluators]);
+
+  const keyImprovements = useMemo(() => {
+    // IPA logic: High Importance, Low Performance
+    return [...indicatorData]
+      .sort((a, b) => (b.weight / (a.score + 1)) - (a.weight / (b.score + 1)))
+      .slice(0, 5);
+  }, [indicatorData]);
+
+  const ipaThresholds = useMemo(() => {
+    if (indicatorData.length === 0) return { performance: 70, importance: 0.03 };
+    const performance = indicatorData.reduce((acc, curr) => acc + curr.score, 0) / indicatorData.length;
+    const importance = indicatorData.reduce((acc, curr) => acc + curr.weight, 0) / indicatorData.length;
+    return { performance, importance };
+  }, [indicatorData]);
 
   const handleFinish = async () => {
     setStep('results');
@@ -650,12 +669,166 @@ function AppContent() {
                 </div>
 
                 <div className="px-8 pb-8">
-                  <IPAScatterChart data={indicatorData.map(d => ({
-                    id: d.id,
-                    name: d.name,
-                    performance: d.score,
-                    importance: d.weight
-                  }))} />
+                  <IPAScatterChart 
+                    data={indicatorData.map(d => ({
+                      id: d.id,
+                      name: d.name,
+                      performance: d.score,
+                      importance: d.weight
+                    }))} 
+                    thresholds={ipaThresholds}
+                  />
+                </div>
+
+                {/* Structured Evaluation Report Section */}
+                <div className="p-8 border-t border-slate-100 bg-white">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                        <ClipboardCheck className="text-indigo-600 w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-slate-800">结构化评价报告</h3>
+                        <p className="text-xs text-slate-500">综合云模型、IPA象限及雷达图的深度量化诊断</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-8">
+                    {/* Part 1: Dimension Ranking */}
+                    <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+                      <div className="flex items-center gap-2 mb-4">
+                        <BarChart3 className="w-5 h-5 text-indigo-600" />
+                        <h4 className="font-bold text-slate-800">（1）各维度得分排名</h4>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                        {dimensionRanking.map((dim, idx) => (
+                          <div key={dim.subject} className="flex flex-col items-center justify-center bg-white p-4 rounded-xl border border-slate-100 text-center">
+                            <span className={cn(
+                              "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mb-2",
+                              idx === 0 ? "bg-yellow-100 text-yellow-700" : 
+                              idx === 1 ? "bg-slate-200 text-slate-700" :
+                              idx === 2 ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-400"
+                            )}>
+                              {idx + 1}
+                            </span>
+                            <span className="text-xs font-medium text-slate-500 mb-1">{dim.subject}</span>
+                            <span className="text-lg font-black text-slate-900">{dim.A.toFixed(1)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Part 2: Key Improvements */}
+                    <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <Target className="w-5 h-5 text-red-600" />
+                          <h4 className="font-bold text-slate-800">（2）重点改进指标清单 (基于IPA分析)</h4>
+                        </div>
+                        <button 
+                          onClick={() => setShowFullData(!showFullData)}
+                          className="text-blue-600 text-[10px] font-bold hover:underline flex items-center gap-1 uppercase tracking-wider"
+                        >
+                          {showFullData ? "收起明细" : "查看全部指标明细"} <ArrowRight className={cn("w-3 h-3 transition-transform", showFullData && "rotate-90")} />
+                        </button>
+                      </div>
+                      
+                      <AnimatePresence>
+                        {showFullData && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden mb-6"
+                          >
+                            <div className="bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl">
+                              <div className="p-4 bg-slate-800/50 border-b border-slate-700 flex items-center justify-between">
+                                <h5 className="text-white font-bold text-sm flex items-center gap-2">
+                                  <Database className="w-4 h-4 text-blue-400" /> IPA 分析：完整指标评价数据明细
+                                </h5>
+                                <span className="text-[10px] text-slate-400 font-mono uppercase tracking-widest">Full Dataset v1.0</span>
+                              </div>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                  <thead>
+                                    <tr className="bg-slate-800/30">
+                                      <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-700">编号</th>
+                                      <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-700">评价指标名称</th>
+                                      <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-700">绩效得分</th>
+                                      <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-700">重要性权重</th>
+                                      <th className="p-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-700">象限归属</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-800">
+                                    {indicatorData.sort((a, b) => b.weight - a.weight).map((ind) => {
+                                      const isHighPerf = ind.score >= ipaThresholds.performance;
+                                      const isHighImp = ind.weight >= ipaThresholds.importance;
+                                      let quadrant = "";
+                                      let quadColor = "";
+                                      
+                                      if (isHighPerf && isHighImp) { 
+                                        quadrant = "优势区"; 
+                                        quadColor = "text-emerald-400"; 
+                                      } else if (!isHighPerf && isHighImp) { 
+                                        quadrant = "改进区"; 
+                                        quadColor = "text-red-400"; 
+                                      } else if (!isHighPerf && !isHighImp) { 
+                                        quadrant = "维持区"; 
+                                        quadColor = "text-slate-400"; 
+                                      } else { 
+                                        quadrant = "调整区"; 
+                                        quadColor = "text-amber-400"; 
+                                      }
+
+                                      return (
+                                        <tr key={ind.id} className="hover:bg-slate-800/50 transition-colors group">
+                                          <td className="p-4 text-xs font-mono text-slate-500 group-hover:text-blue-400">{ind.id}</td>
+                                          <td className="p-4 text-xs font-bold text-slate-300">{ind.name}</td>
+                                          <td className="p-4">
+                                            <div className="flex items-center gap-2">
+                                              <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                                <div 
+                                                  className={cn(
+                                                    "h-full rounded-full",
+                                                    ind.score >= 80 ? "bg-emerald-500" : ind.score >= 60 ? "bg-blue-500" : "bg-red-500"
+                                                  )}
+                                                  style={{ width: `${ind.score}%` }}
+                                                ></div>
+                                              </div>
+                                              <span className="text-xs font-mono text-white">{ind.score.toFixed(1)}</span>
+                                            </div>
+                                          </td>
+                                          <td className="p-4 text-xs font-mono text-slate-400">{(ind.weight * 100).toFixed(2)}%</td>
+                                          <td className={cn("p-4 text-[10px] font-bold uppercase tracking-wider", quadColor)}>{quadrant}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {keyImprovements.map((ind, idx) => (
+                          <div key={ind.id} className="bg-white p-4 rounded-xl border border-red-100 relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-12 h-12 bg-red-50 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+                            <div className="relative">
+                              <div className="text-[10px] font-bold text-red-500 mb-1">PRIORITY {idx + 1}</div>
+                              <div className="font-bold text-slate-800 text-sm mb-2">{ind.name}</div>
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-slate-400">当前得分: <span className="text-red-600 font-bold">{ind.score.toFixed(1)}</span></span>
+                                <span className="text-slate-400">权重: <span className="text-slate-600 font-bold">{(ind.weight * 100).toFixed(1)}%</span></span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="p-8 border-t border-slate-100 bg-slate-50/50">
@@ -664,7 +837,7 @@ function AppContent() {
                       <Lightbulb className="text-blue-600 w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-slate-800">数字化转型改进建议</h3>
+                      <h3 className="text-xl font-bold text-slate-800">（4）针对性管理建议</h3>
                       <p className="text-xs text-slate-500">基于多维指标分析与 Gemini AI 生成的专业化指导方案</p>
                     </div>
                   </div>
